@@ -1,0 +1,35 @@
+# Java / Maven
+target/
+*.class
+*.jar
+!.mvn/wrapper/maven-wrapper.jar
+
+# IDE
+.vscode/
+.idea/
+*.iml
+
+# Variables de entorno y secretos
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Node (para cuando armes el frontend)
+node_modules/
+dist/
+build/
+.vite/
+
+# Kotlin/Android (para cuando armes la app móvil)
+*.apk
+*.aab
+local.properties
+.gradle/
