@@ -9,7 +9,7 @@
 Sistema web y app móvil en la nube para centralizar el inventario de una ferretería con 2 tiendas ("Romel" y "Todopernos", cada una con RUC propio) que comparten un almacén central. Hoy la información vive separada en cada tienda (sistema local) y en un sistema en la nube usado solo para facturación — ninguno está centralizado. El diferenciador del proyecto es el **inventario móvil por código de barras**, con actualización de stock en tiempo casi real entre ambas tiendas y el almacén.
 
 **Fuera de alcance (asunción a confirmar contigo):** este sistema NO reemplaza la facturación electrónica (boletas/facturas/guías de remisión) que ya manejan en su sistema actual en la nube. El nuevo sistema registra ventas y compras a nivel interno (para descontar/sumar stock y dar trazabilidad), pero no emite comprobantes electrónicos ante SUNAT. Si esto cambia, hay que actualizar el modelo de datos antes de tocar código.
-
+ 
 ---
 
 ## 2. Stack tecnológico (definitivo, no cambiar sin confirmar)

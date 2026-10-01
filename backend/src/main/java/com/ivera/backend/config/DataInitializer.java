@@ -29,6 +29,12 @@ public class DataInitializer implements CommandLineRunner {
     @Value("${ADMIN_PASSWORD}")
     private String adminPassword;
 
+    @Value("${TEST_WORKER_EMAIL}")
+    private String workerEmail;
+
+    @Value("${TEST_WORKER_PASSWORD}")
+    private String workerPassword;
+
     public DataInitializer(UnidadMedidaRepository unidadMedidaRepository,
                            TiendaRepository tiendaRepository,
                            AlmacenRepository almacenRepository,
@@ -47,6 +53,7 @@ public class DataInitializer implements CommandLineRunner {
         cargarTiendas();
         cargarAlmacen();
         cargarAdmin();
+        cargarTrabajadorPrueba();
     }
 
     private void cargarUnidadesMedida() {
@@ -92,6 +99,17 @@ public class DataInitializer implements CommandLineRunner {
             admin.setPasswordHash(passwordEncoder.encode(adminPassword));
             admin.setRol(Rol.ADMINISTRADOR);
             usuarioRepository.save(admin);
+        }
+    }
+
+    private void cargarTrabajadorPrueba() {
+        if (!usuarioRepository.existsByEmail(workerEmail)) {
+            Usuario worker = new Usuario();
+            worker.setNombre("Trabajador de Prueba");
+            worker.setEmail(workerEmail);
+            worker.setPasswordHash(passwordEncoder.encode(workerPassword));
+            worker.setRol(Rol.TRABAJADOR);
+            usuarioRepository.save(worker);
         }
     }
 }

@@ -1,7 +1,7 @@
 # Progreso — Ivera
 
 ## Estado actual
-Sprint 1 — Tareas 1.1, 1.2 y 1.3 completadas
+Sprint 2 — Tarea 2.1 completada
 
 ## Hecho
 ### Sprint 1 — Tarea 1.1: Proyecto base
@@ -29,7 +29,7 @@ Sprint 1 — Tareas 1.1, 1.2 y 1.3 completadas
 - `UserDetailsServiceImpl.java` — carga usuario desde BD vía email.
 - `JwtAuthenticationFilter.java` — filtro `OncePerRequestFilter` que extrae JWT del header `Authorization: Bearer ...`.
 - `SecurityConfig.java` — `/api/health`, `/api/auth/login`, Swagger públicos; resto requiere token; sin contraseña generada por defecto.
-- `DataInitializer.java` — crea admin desde variables de entorno `ADMIN_EMAIL` y `ADMIN_PASSWORD` (BCrypt), idempotente.
+- `DataInitializer.java` — crea admin desde variables de entorno `ADMIN_EMAIL` y `ADMIN_PASSWORD` (BCrypt), idempotente. Además crea un usuario de prueba con rol TRABAJADOR desde `TEST_WORKER_EMAIL` y `TEST_WORKER_PASSWORD` (BCrypt) — usuario de prueba, no usar en producción.
 - Compilación y empaquetado verificados (`mvn compile`, `mvn package`).
 
 #### Bugs encontrados y corregidos:
@@ -40,8 +40,34 @@ Sprint 1 — Tareas 1.1, 1.2 y 1.3 completadas
 
 Ambos corregidos, `mvn clean compile` → BUILD SUCCESS.
 
+### Sprint 1 — Tarea 1.4: CRUD de Producto con presentaciones
+- DTOs: `ProductoRequest`, `PresentacionRequest`, `ProductoResponse`, `PresentacionResponse`, `UnidadResponse`.
+- `ProductoService.java` — CRUD completo con creación/actualización de presentaciones, búsqueda por nombre y código de barras, equivalencia calculada (ej. "1 saco = 25 unidad(es) base").
+- `ProductoController.java` — endpoints:
+  - `GET /api/productos` (listar, con ?nombre= opcional)
+  - `GET /api/productos/{id}` (obtener por ID)
+  - `GET /api/productos/buscar/codigo?codigo=X` (buscar por código de barras)
+  - `POST /api/productos` (crear — solo ADMINISTRADOR)
+  - `PUT /api/productos/{id}` (actualizar — solo ADMINISTRADOR)
+  - `DELETE /api/productos/{id}` (eliminar — solo ADMINISTRADOR)
+- `SecurityConfig.java` — agregado `@EnableMethodSecurity`.
+- `ProductoRepository.java` — agregado `findByNombreContainingIgnoreCase` y `findByCodigoBarras`.
+- `ProductoPresentacionRepository.java` — agregado `findByProductoId` y `deleteByProductoId`.
+- `OpenApiConfig.java` — esquema de seguridad Bearer JWT para Swagger.
+- Todos los endpoints validados con `@Valid` y permisos con `@PreAuthorize`.
+- **Bug corregido**: Mapeo del campo `unidad` en `PresentacionResponse` dentro de `ProductoService.toPresentacionResponse` para que devuelva el objeto completo (`id` + `nombre`), igual que `unidadBase`.
+
+### Sprint 2 — Tarea 2.1: Entidad Stock, Repositorio y Stock Consolidado
+- `UbicacionTipo.java` enum (`TIENDA`, `ALMACEN`).
+- `Stock.java` (Entidad JPA con relación a `Producto`, `ubicacionTipo`, `ubicacionId`, `cantidad` en unidad base).
+- `StockRepository.java` (repositorio JPA con métodos de búsqueda por producto y ubicación).
+- `StockResponse.java` DTO.
+- `StockService.java` — lógica para consultar el stock consolidado de un producto por ubicación, retornando todas las tiendas y almacenes (con cantidad 0 si no existe registro previo).
+- `StockController.java` — endpoint `GET /api/stock/{productoId}` (accesible por roles `ADMINISTRADOR` y `TRABAJADOR`).
+- **Ajuste en `application.yml`**: Fusión de bloques `server:` duplicados para evitar excepciones de carga YAML.
+
 ## Decisiones tomadas durante el desarrollo
-(nada aún)
+- Se agregó un usuario de prueba con rol TRABAJADOR (variables `TEST_WORKER_EMAIL` / `TEST_WORKER_PASSWORD`) para facilitar pruebas de endpoints protegidos por rol. Este usuario no debe usarse en producción.
 
 ## Pendientes / dudas
 (nada aún)
