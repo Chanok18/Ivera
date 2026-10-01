@@ -1,7 +1,7 @@
 # Progreso — Ivera
 
 ## Estado actual
-Sprint 2 — Tarea 2.1 completada
+Sprint 2 — Tarea 2.2 completada
 
 ## Hecho
 ### Sprint 1 — Tarea 1.1: Proyecto base
@@ -65,6 +65,20 @@ Ambos corregidos, `mvn clean compile` → BUILD SUCCESS.
 - `StockService.java` — lógica para consultar el stock consolidado de un producto por ubicación, retornando todas las tiendas y almacenes (con cantidad 0 si no existe registro previo).
 - `StockController.java` — endpoint `GET /api/stock/{productoId}` (accesible por roles `ADMINISTRADOR` y `TRABAJADOR`).
 - **Ajuste en `application.yml`**: Fusión de bloques `server:` duplicados para evitar excepciones de carga YAML.
+
+### Sprint 2 — Tarea 2.2: Entidad Movimiento, Repositorio y Registro de Movimientos
+- `MovimientoTipo.java` enum (`ENTRADA`, `SALIDA`, `AJUSTE`, `TRASLADO`).
+- `MovimientoEstado.java` enum (`PENDIENTE`, `APROBADO`, `RECHAZADO`).
+- `Movimiento.java` (Entidad JPA con relaciones a `Producto`, `UnidadMedida`, `Usuario`, ubicaciones de origen/destino, estado, etc.).
+- `MovimientoRepository.java`.
+- `MovimientoRequest.java` / `MovimientoResponse.java` DTOs.
+- `MovimientoService.java` — lógica de negocio:
+  - Conversión de cantidad a unidad base (soporta unidad base y presentaciones).
+  - Validación de existencia de producto, unidad y ubicaciones.
+  - Validación de cantidad positiva y stock suficiente para salidas.
+  - `ENTRADA` y `SALIDA` actualizan el Stock inmediatamente y se marcan como `APROBADO`.
+  - `AJUSTE` y `TRASLADO` se registran en estado `PENDIENTE` sin modificar el stock.
+- `MovimientoController.java` — endpoint `POST /api/movimientos` (accesible por `ADMINISTRADOR` y `TRABAJADOR`).
 
 ## Decisiones tomadas durante el desarrollo
 - Se agregó un usuario de prueba con rol TRABAJADOR (variables `TEST_WORKER_EMAIL` / `TEST_WORKER_PASSWORD`) para facilitar pruebas de endpoints protegidos por rol. Este usuario no debe usarse en producción.
