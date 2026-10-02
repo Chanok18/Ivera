@@ -1,7 +1,7 @@
 # Progreso — Ivera
 
 ## Estado actual
-Sprint 2 — Tarea 2.2 completada
+Sprint 2 — Tarea 2.3 completada
 
 ## Hecho
 ### Sprint 1 — Tarea 1.1: Proyecto base
@@ -79,6 +79,17 @@ Ambos corregidos, `mvn clean compile` → BUILD SUCCESS.
   - `ENTRADA` y `SALIDA` actualizan el Stock inmediatamente y se marcan como `APROBADO`.
   - `AJUSTE` y `TRASLADO` se registran en estado `PENDIENTE` sin modificar el stock.
 - `MovimientoController.java` — endpoint `POST /api/movimientos` (accesible por `ADMINISTRADOR` y `TRABAJADOR`).
+
+### Sprint 2 — Tarea 2.3: Aprobación y Rechazo de Movimientos
+- `MovimientoService.java` — métodos `aprobar(Long id)` y `rechazar(Long id)`:
+  - Validación de estado `PENDIENTE` (lanza error claro si ya fue aprobado o rechazado).
+  - Registro del administrador autenticado en `aprobado_por`.
+  - Aplicación de efectos sobre `Stock` al aprobar:
+    - **TRASLADO**: resta de ubicación origen (validando stock suficiente) y suma a ubicación destino.
+    - **AJUSTE**: aplica la diferencia de cantidad (positiva o negativa) en la ubicación origen.
+  - Al rechazar: cambia estado a `RECHAZADO` sin modificar stock.
+- `MovimientoController.java` — endpoints `PUT /api/movimientos/{id}/aprobar` y `PUT /api/movimientos/{id}/rechazar` (restringidos a `ADMINISTRADOR` mediante `@PreAuthorize("hasRole('ADMINISTRADOR')")`).
+- `GlobalExceptionHandler.java` — manejador global de excepciones (`EntityNotFoundException` a 404, `IllegalStateException`/`IllegalArgumentException` a 400).
 
 ## Decisiones tomadas durante el desarrollo
 - Se agregó un usuario de prueba con rol TRABAJADOR (variables `TEST_WORKER_EMAIL` / `TEST_WORKER_PASSWORD`) para facilitar pruebas de endpoints protegidos por rol. Este usuario no debe usarse en producción.

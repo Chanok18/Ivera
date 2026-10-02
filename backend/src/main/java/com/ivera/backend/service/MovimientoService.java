@@ -49,8 +49,14 @@ public class MovimientoService {
 
     @Transactional
     public MovimientoResponse registrar(MovimientoRequest request) {
-        if (request.getCantidad() == null || request.getCantidad().compareTo(BigDecimal.ZERO) <= 0) {
-            throw new IllegalArgumentException("La cantidad debe ser mayor a cero");
+        if (request.getTipo() == MovimientoTipo.AJUSTE) {
+            if (request.getCantidad() == null || request.getCantidad().compareTo(BigDecimal.ZERO) == 0) {
+                throw new IllegalArgumentException("La cantidad del ajuste no puede ser cero");
+            }
+        } else {
+            if (request.getCantidad() == null || request.getCantidad().compareTo(BigDecimal.ZERO) <= 0) {
+                throw new IllegalArgumentException("La cantidad debe ser mayor a cero");
+            }
         }
 
         Producto producto = productoRepository.findById(request.getProductoId())
@@ -59,10 +65,8 @@ public class MovimientoService {
         UnidadMedida unidad = unidadMedidaRepository.findById(request.getUnidadId())
                 .orElseThrow(() -> new EntityNotFoundException("Unidad de medida no encontrada: " + request.getUnidadId()));
 
-        // Validar ubicación de origen
         validarUbicacion(request.getUbicacionOrigenTipo(), request.getUbicacionOrigenId());
 
-        // Si es TRASLADO, validar ubicación de destino
         if (request.getTipo() == MovimientoTipo.TRASLADO) {
             if (request.getUbicacionDestinoTipo() == null || request.getUbicacionDestinoId() == null) {
                 throw new IllegalArgumentException("El traslado requiere ubicación de destino (tipo e ID)");
@@ -74,10 +78,8 @@ public class MovimientoService {
             }
         }
 
-        // Calcular cantidad en unidad base
         BigDecimal cantidadBase = calcularCantidadBase(producto, unidad, request.getCantidad());
 
-        // Obtener usuario autenticado
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         String email = auth.getName();
         Usuario usuario = usuarioRepository.findByEmail(email)
@@ -95,22 +97,21 @@ public class MovimientoService {
         movimiento.setUsuario(usuario);
         movimiento.setMotivo(request.getMotivo());
 
-        // ENTRADA y SALIDA actualizan stock inmediatamente (estado APROBADO automático)
-        // AJUSTE y TRASLADO quedan en estado PENDIENTE sin tocar stock
         if (request.getTipo() == MovimientoTipo.ENTRADA || request.getTipo() == MovimientoTipo.SALIDA) {
             movimiento.setEstado(MovimientoEstado.APROBADO);
             movimiento.setAprobadoPor(usuario);
 
             Stock stock = stockRepository.findByProductoIdAndUbicacionTipoAndUbicacionId(
                     producto.getId(), request.getUbicacionOrigenTipo(), request.getUbicacionOrigenId()
-            ).orElseGet(() -> {
-                Stock nuevo = new Stock();
-                nuevo.setProducto(producto);
-                nuevo.setUbicacionTipo(request.getUbicacionOrigenTipo());
-                nuevo.setUbicacionId(request.getUbicacionOrigenId());
-                nuevo.setCantidad(BigDecimal.ZERO);
-                return nuevo;
-            });
+            ).orElse(null);
+
+            if (stock == null) {
+                stock = new Stock();
+                stock.setProducto(producto);
+                stock.setUbicacionTipo(request.getUbicacionOrigenTipo());
+                stock.setUbicacionId(request.getUbicacionOrigenId());
+                stock.setCantidad(BigDecimal.ZERO);
+            }
 
             if (request.getTipo() == MovimientoTipo.ENTRADA) {
                 stock.setCantidad(stock.getCantidad().add(cantidadBase));
@@ -124,6 +125,103 @@ public class MovimientoService {
         } else {
             movimiento.setEstado(MovimientoEstado.PENDIENTE);
         }
+
+        movimiento = movimientoRepository.save(movimiento);
+        return toResponse(movimiento);
+    }
+
+    @Transactional
+    public MovimientoResponse aprobar(Long id) {
+        Movimiento movimiento = movimientoRepository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("Movimiento no encontrado: " + id));
+
+        if (movimiento.getEstado() != MovimientoEstado.PENDIENTE) {
+            throw new IllegalStateException("El movimiento no se encuentra en estado PENDIENTE (estado actual: " + movimiento.getEstado() + "). No se puede aprobar.");
+        }
+
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        String email = auth.getName();
+        Usuario admin = usuarioRepository.findByEmail(email)
+                .orElseThrow(() -> new EntityNotFoundException("Usuario administrador no encontrado: " + email));
+
+        movimiento.setEstado(MovimientoEstado.APROBADO);
+        movimiento.setAprobadoPor(admin);
+
+        if (movimiento.getTipo() == MovimientoTipo.TRASLADO) {
+            Stock stockOrigen = stockRepository.findByProductoIdAndUbicacionTipoAndUbicacionId(
+                    movimiento.getProducto().getId(), movimiento.getUbicacionOrigenTipo(), movimiento.getUbicacionOrigenId()
+            ).orElse(null);
+
+            if (stockOrigen == null) {
+                stockOrigen = new Stock();
+                stockOrigen.setProducto(movimiento.getProducto());
+                stockOrigen.setUbicacionTipo(movimiento.getUbicacionOrigenTipo());
+                stockOrigen.setUbicacionId(movimiento.getUbicacionOrigenId());
+                stockOrigen.setCantidad(BigDecimal.ZERO);
+            }
+
+            if (stockOrigen.getCantidad().compareTo(movimiento.getCantidad()) < 0) {
+                throw new IllegalStateException("Stock insuficiente en la ubicación de origen para aprobar el traslado");
+            }
+            stockOrigen.setCantidad(stockOrigen.getCantidad().subtract(movimiento.getCantidad()));
+            stockRepository.save(stockOrigen);
+
+            Stock stockDestino = stockRepository.findByProductoIdAndUbicacionTipoAndUbicacionId(
+                    movimiento.getProducto().getId(), movimiento.getUbicacionDestinoTipo(), movimiento.getUbicacionDestinoId()
+            ).orElse(null);
+
+            if (stockDestino == null) {
+                stockDestino = new Stock();
+                stockDestino.setProducto(movimiento.getProducto());
+                stockDestino.setUbicacionTipo(movimiento.getUbicacionDestinoTipo());
+                stockDestino.setUbicacionId(movimiento.getUbicacionDestinoId());
+                stockDestino.setCantidad(BigDecimal.ZERO);
+            }
+
+            stockDestino.setCantidad(stockDestino.getCantidad().add(movimiento.getCantidad()));
+            stockRepository.save(stockDestino);
+
+        } else if (movimiento.getTipo() == MovimientoTipo.AJUSTE) {
+            Stock stock = stockRepository.findByProductoIdAndUbicacionTipoAndUbicacionId(
+                    movimiento.getProducto().getId(), movimiento.getUbicacionOrigenTipo(), movimiento.getUbicacionOrigenId()
+            ).orElse(null);
+
+            if (stock == null) {
+                stock = new Stock();
+                stock.setProducto(movimiento.getProducto());
+                stock.setUbicacionTipo(movimiento.getUbicacionOrigenTipo());
+                stock.setUbicacionId(movimiento.getUbicacionOrigenId());
+                stock.setCantidad(BigDecimal.ZERO);
+            }
+
+            BigDecimal nuevaCantidad = stock.getCantidad().add(movimiento.getCantidad());
+            if (nuevaCantidad.compareTo(BigDecimal.ZERO) < 0) {
+                throw new IllegalStateException("El ajuste dejaría el stock en negativo, lo cual no está permitido");
+            }
+            stock.setCantidad(nuevaCantidad);
+            stockRepository.save(stock);
+        }
+
+        movimiento = movimientoRepository.save(movimiento);
+        return toResponse(movimiento);
+    }
+
+    @Transactional
+    public MovimientoResponse rechazar(Long id) {
+        Movimiento movimiento = movimientoRepository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("Movimiento no encontrado: " + id));
+
+        if (movimiento.getEstado() != MovimientoEstado.PENDIENTE) {
+            throw new IllegalStateException("El movimiento no se encuentra en estado PENDIENTE (estado actual: " + movimiento.getEstado() + "). No se puede rechazar.");
+        }
+
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        String email = auth.getName();
+        Usuario admin = usuarioRepository.findByEmail(email)
+                .orElseThrow(() -> new EntityNotFoundException("Usuario administrador no encontrado: " + email));
+
+        movimiento.setEstado(MovimientoEstado.RECHAZADO);
+        movimiento.setAprobadoPor(admin);
 
         movimiento = movimientoRepository.save(movimiento);
         return toResponse(movimiento);

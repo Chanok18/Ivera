@@ -31,4 +31,20 @@ public class MovimientoController {
         MovimientoResponse response = movimientoService.registrar(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
+
+    @PutMapping("/{id}/aprobar")
+    @Operation(summary = "Aprobar un movimiento pendiente (solo ADMINISTRADOR)")
+    @PreAuthorize("hasRole('ADMINISTRADOR')")
+    public ResponseEntity<MovimientoResponse> aprobar(@PathVariable Long id) {
+        MovimientoResponse response = movimientoService.aprobar(id);
+        return ResponseEntity.ok(response);
+    }
+
+    @PutMapping("/{id}/rechazar")
+    @Operation(summary = "Rechazar un movimiento pendiente (solo ADMINISTRADOR)")
+    @PreAuthorize("hasRole('ADMINISTRADOR')")
+    public ResponseEntity<MovimientoResponse> rechazar(@PathVariable Long id) {
+        MovimientoResponse response = movimientoService.rechazar(id);
+        return ResponseEntity.ok(response);
+    }
 }
