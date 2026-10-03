@@ -59,10 +59,13 @@ public class VentaService {
         Usuario usuario = usuarioRepository.findByEmail(email)
                 .orElseThrow(() -> new EntityNotFoundException("Usuario autenticado no encontrado: " + email));
 
-        // 1. Verificación previa de stock para todos los ítems (Todo o Nada)
+        // 1. Resolver productos y verificación previa de stock para todos los ítems (Todo o Nada)
+        BigDecimal total = BigDecimal.ZERO;
+        List<Producto> productosResueltos = new ArrayList<>();
+
         for (VentaItemRequest itemReq : request.getItems()) {
-            Producto producto = productoRepository.findById(itemReq.getProductoId())
-                    .orElseThrow(() -> new EntityNotFoundException("Producto no encontrado: " + itemReq.getProductoId()));
+            Producto producto = resolverProducto(itemReq);
+            productosResueltos.add(producto);
 
             UnidadMedida unidad = unidadMedidaRepository.findById(itemReq.getUnidadId())
                     .orElseThrow(() -> new EntityNotFoundException("Unidad de medida no encontrada: " + itemReq.getUnidadId()));
@@ -79,11 +82,7 @@ public class VentaService {
                 throw new IllegalArgumentException("Stock insuficiente para el producto: " + producto.getNombre() +
                         " (Disponible: " + stockDisponible + ", Requerido: " + cantidadBase + ")");
             }
-        }
 
-        // Calcular total antes de guardar la venta
-        BigDecimal total = BigDecimal.ZERO;
-        for (VentaItemRequest itemReq : request.getItems()) {
             BigDecimal subtotal = itemReq.getCantidad().multiply(itemReq.getPrecioUnitario());
             total = total.add(subtotal);
         }
@@ -97,8 +96,9 @@ public class VentaService {
 
         List<VentaDetalle> detalles = new ArrayList<>();
 
-        for (VentaItemRequest itemReq : request.getItems()) {
-            Producto producto = productoRepository.findById(itemReq.getProductoId()).get();
+        for (int i = 0; i < request.getItems().size(); i++) {
+            VentaItemRequest itemReq = request.getItems().get(i);
+            Producto producto = productosResueltos.get(i);
             UnidadMedida unidad = unidadMedidaRepository.findById(itemReq.getUnidadId()).get();
 
             VentaDetalle detalle = new VentaDetalle();
@@ -147,6 +147,18 @@ public class VentaService {
         Venta venta = ventaRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Venta no encontrada: " + id));
         return toResponse(venta, ventaDetalleRepository.findByVentaId(venta.getId()));
+    }
+
+    private Producto resolverProducto(VentaItemRequest itemReq) {
+        if (itemReq.getProductoId() != null) {
+            return productoRepository.findById(itemReq.getProductoId())
+                    .orElseThrow(() -> new EntityNotFoundException("Producto con ID " + itemReq.getProductoId() + " no encontrado"));
+        }
+        if (itemReq.getCodigoBarras() != null && !itemReq.getCodigoBarras().isBlank()) {
+            return productoRepository.findByCodigoBarras(itemReq.getCodigoBarras())
+                    .orElseThrow(() -> new EntityNotFoundException("Producto con código de barras " + itemReq.getCodigoBarras() + " no encontrado"));
+        }
+        throw new IllegalArgumentException("Debe proporcionar productoId o codigoBarras para cada ítem de venta");
     }
 
     private BigDecimal calcularCantidadBase(Producto producto, UnidadMedida unidad, BigDecimal cantidadInput) {

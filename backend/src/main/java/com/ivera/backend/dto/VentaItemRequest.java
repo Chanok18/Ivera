@@ -5,8 +5,8 @@ import jakarta.validation.constraints.NotNull;
 import java.math.BigDecimal;
 
 public class VentaItemRequest {
-    @NotNull(message = "El ID del producto es obligatorio")
     private Long productoId;
+    private String codigoBarras;
 
     @NotNull(message = "La cantidad es obligatoria")
     @DecimalMin(value = "0.01", message = "La cantidad debe ser mayor a cero")
@@ -21,6 +21,8 @@ public class VentaItemRequest {
 
     public Long getProductoId() { return productoId; }
     public void setProductoId(Long productoId) { this.productoId = productoId; }
+    public String getCodigoBarras() { return codigoBarras; }
+    public void setCodigoBarras(String codigoBarras) { this.codigoBarras = codigoBarras; }
     public BigDecimal getCantidad() { return cantidad; }
     public void setCantidad(BigDecimal cantidad) { this.cantidad = cantidad; }
     public Long getUnidadId() { return unidadId; }

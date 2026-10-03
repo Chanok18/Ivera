@@ -65,9 +65,14 @@ public class CompraService {
         Usuario usuario = usuarioRepository.findByEmail(email)
                 .orElseThrow(() -> new EntityNotFoundException("Usuario autenticado no encontrado: " + email));
 
-        // Calcular total antes de guardar la compra
+        // Calcular total antes de guardar la compra y resolver productos previamente
         BigDecimal total = BigDecimal.ZERO;
+        List<Producto> productosResueltos = new ArrayList<>();
+
         for (CompraItemRequest itemReq : request.getItems()) {
+            Producto producto = resolverProducto(itemReq);
+            productosResueltos.add(producto);
+
             BigDecimal subtotal = itemReq.getCantidad().multiply(itemReq.getPrecioUnitario());
             total = total.add(subtotal);
         }
@@ -82,9 +87,9 @@ public class CompraService {
 
         List<CompraDetalle> detalles = new ArrayList<>();
 
-        for (CompraItemRequest itemReq : request.getItems()) {
-            Producto producto = productoRepository.findById(itemReq.getProductoId())
-                    .orElseThrow(() -> new EntityNotFoundException("Producto no encontrado: " + itemReq.getProductoId()));
+        for (int i = 0; i < request.getItems().size(); i++) {
+            CompraItemRequest itemReq = request.getItems().get(i);
+            Producto producto = productosResueltos.get(i);
 
             UnidadMedida unidad = unidadMedidaRepository.findById(itemReq.getUnidadId())
                     .orElseThrow(() -> new EntityNotFoundException("Unidad de medida no encontrada: " + itemReq.getUnidadId()));
@@ -144,6 +149,18 @@ public class CompraService {
         Compra compra = compraRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Compra no encontrada: " + id));
         return toResponse(compra, compraDetalleRepository.findByCompraId(compra.getId()));
+    }
+
+    private Producto resolverProducto(CompraItemRequest itemReq) {
+        if (itemReq.getProductoId() != null) {
+            return productoRepository.findById(itemReq.getProductoId())
+                    .orElseThrow(() -> new EntityNotFoundException("Producto con ID " + itemReq.getProductoId() + " no encontrado"));
+        }
+        if (itemReq.getCodigoBarras() != null && !itemReq.getCodigoBarras().isBlank()) {
+            return productoRepository.findByCodigoBarras(itemReq.getCodigoBarras())
+                    .orElseThrow(() -> new EntityNotFoundException("Producto con código de barras " + itemReq.getCodigoBarras() + " no encontrado"));
+        }
+        throw new IllegalArgumentException("Debe proporcionar productoId o codigoBarras para cada ítem de compra");
     }
 
     private BigDecimal calcularCantidadBase(Producto producto, UnidadMedida unidad, BigDecimal cantidadInput) {

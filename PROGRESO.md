@@ -1,7 +1,7 @@
 # Progreso — Ivera
 
 ## Estado actual
-Sprint 3 — Tarea 3.1 completada
+Sprint 3 — Tarea 3.2 completada
 
 ## Hecho
 ### Sprint 1 — Tarea 1.1: Proyecto base
@@ -111,6 +111,12 @@ Ambos corregidos, `mvn clean compile` → BUILD SUCCESS.
 - `Venta.java`, `VentaDetalle.java`, repositorios, DTOs y `VentaController.java`:
   - Endpoint `POST /api/ventas` (validación estricta de stock disponible "todo o nada" antes de aplicar cambios, cálculo de total previo al guardado de la Venta, generación de movimientos `SALIDA` aprobados automáticamente y descuento de stock de la tienda).
   - Endpoints `GET /api/ventas` (con filtro opcional `?tiendaId=`) y `GET /api/ventas/{id}`.
+
+### Sprint 3 — Tarea 3.2: Mapeo de Unidad y Soporte de Código de Barras en Compras y Ventas
+- `CompraItemRequest.java` y `VentaItemRequest.java`: agregado soporte para `codigoBarras` como alternativa a `productoId`.
+- `CompraService.java` y `VentaService.java`:
+  - Método `resolverProducto` robusto: si viene `productoId`, lo busca por ID; si no, si viene `codigoBarras`, lo busca con `productoRepository.findByCodigoBarras(codigoBarras)` (lanzando error claro si no existe); si no viene ninguno, lanza excepción de validación.
+  - Verificación del mapeo correcto del campo `unidad` (`UnidadResponse` con `id` y `nombre`) en los detalles de respuesta de compras y ventas.
 
 ## Decisiones tomadas durante el desarrollo
 - Se agregó un usuario de prueba con rol TRABAJADOR (variables `TEST_WORKER_EMAIL` / `TEST_WORKER_PASSWORD`) para facilitar pruebas de endpoints protegidos por rol. Este usuario no debe usarse en producción.
