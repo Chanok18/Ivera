@@ -1,7 +1,7 @@
 # Progreso — Ivera
 
 ## Estado actual
-Sprint 2 — Tarea 2.3 completada
+Sprint 3 — Tarea 3.1 completada
 
 ## Hecho
 ### Sprint 1 — Tarea 1.1: Proyecto base
@@ -90,6 +90,27 @@ Ambos corregidos, `mvn clean compile` → BUILD SUCCESS.
   - Al rechazar: cambia estado a `RECHAZADO` sin modificar stock.
 - `MovimientoController.java` — endpoints `PUT /api/movimientos/{id}/aprobar` y `PUT /api/movimientos/{id}/rechazar` (restringidos a `ADMINISTRADOR` mediante `@PreAuthorize("hasRole('ADMINISTRADOR')")`).
 - `GlobalExceptionHandler.java` — manejador global de excepciones (`EntityNotFoundException` a 404, `IllegalStateException`/`IllegalArgumentException` a 400).
+
+### Sprint 2 — Tarea 2.4: Conteo Físico de Inventario
+- `ConteoEstado.java` enum (`EN_PROCESO`, `FINALIZADO`).
+- `ConteoInventario.java` y `ConteoDetalle.java` (Entidades JPA para conteo físico y sus detalles con cálculo de diferencia `cantidadContada - cantidadSistema`).
+- `ConteoInventarioRepository.java` y `ConteoDetalleRepository.java`.
+- `ConteoRequest.java`, `ConteoDetalleRequest.java`, `ConteoDetalleResponse.java`, `ConteoResponse.java` DTOs.
+- `ConteoService.java` — lógica de negocio:
+  - Iniciar conteo (`EN_PROCESO`).
+  - Agregar/actualizar detalle de producto consultando automáticamente el stock actual en sistema y calculando la diferencia.
+  - Finalizar conteo (`FINALIZADO`, sin modificar stock automáticamente).
+  - Consultar conteo con todos sus detalles y diferencias.
+- `ConteoController.java` — endpoints `POST /api/conteos`, `POST /api/conteos/{id}/detalle`, `PUT /api/conteos/{id}/finalizar`, `GET /api/conteos/{id}` (accesibles por `ADMINISTRADOR` y `TRABAJADOR`).
+
+### Sprint 3 — Tarea 3.1: Proveedores, Compras y Ventas
+- `Proveedor.java`, `ProveedorRepository.java`, DTOs, y `ProveedorController.java` (CRUD completo: Admin crea/edita/elimina, ambos roles consultan).
+- `Compra.java`, `CompraDetalle.java`, repositorios, DTOs y `CompraController.java`:
+  - Endpoint `POST /api/compras` (calcula el total en memoria a partir de los ítems del request antes de persistir la entidad Compra, generando movimientos `ENTRADA` aprobados automáticamente y sumando stock a la tienda indicada).
+  - Endpoints `GET /api/compras` (con filtro opcional `?tiendaId=`) y `GET /api/compras/{id}`.
+- `Venta.java`, `VentaDetalle.java`, repositorios, DTOs y `VentaController.java`:
+  - Endpoint `POST /api/ventas` (validación estricta de stock disponible "todo o nada" antes de aplicar cambios, cálculo de total previo al guardado de la Venta, generación de movimientos `SALIDA` aprobados automáticamente y descuento de stock de la tienda).
+  - Endpoints `GET /api/ventas` (con filtro opcional `?tiendaId=`) y `GET /api/ventas/{id}`.
 
 ## Decisiones tomadas durante el desarrollo
 - Se agregó un usuario de prueba con rol TRABAJADOR (variables `TEST_WORKER_EMAIL` / `TEST_WORKER_PASSWORD`) para facilitar pruebas de endpoints protegidos por rol. Este usuario no debe usarse en producción.
