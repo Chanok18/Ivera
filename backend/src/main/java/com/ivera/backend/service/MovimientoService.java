@@ -59,7 +59,7 @@ public class MovimientoService {
             }
         }
 
-        Producto producto = productoRepository.findById(request.getProductoId())
+        Producto producto = productoRepository.findByIdForUpdate(request.getProductoId())
                 .orElseThrow(() -> new EntityNotFoundException("Producto no encontrado: " + request.getProductoId()));
 
         UnidadMedida unidad = unidadMedidaRepository.findById(request.getUnidadId())
@@ -132,7 +132,7 @@ public class MovimientoService {
 
     @Transactional
     public MovimientoResponse aprobar(Long id) {
-        Movimiento movimiento = movimientoRepository.findById(id)
+        Movimiento movimiento = movimientoRepository.findByIdForUpdate(id)
                 .orElseThrow(() -> new EntityNotFoundException("Movimiento no encontrado: " + id));
 
         if (movimiento.getEstado() != MovimientoEstado.PENDIENTE) {
@@ -143,6 +143,10 @@ public class MovimientoService {
         String email = auth.getName();
         Usuario admin = usuarioRepository.findByEmail(email)
                 .orElseThrow(() -> new EntityNotFoundException("Usuario administrador no encontrado: " + email));
+
+        Long productoId = movimiento.getProducto().getId();
+        productoRepository.findByIdForUpdate(productoId)
+                .orElseThrow(() -> new EntityNotFoundException("Producto no encontrado: " + productoId));
 
         movimiento.setEstado(MovimientoEstado.APROBADO);
         movimiento.setAprobadoPor(admin);
@@ -208,7 +212,7 @@ public class MovimientoService {
 
     @Transactional
     public MovimientoResponse rechazar(Long id) {
-        Movimiento movimiento = movimientoRepository.findById(id)
+        Movimiento movimiento = movimientoRepository.findByIdForUpdate(id)
                 .orElseThrow(() -> new EntityNotFoundException("Movimiento no encontrado: " + id));
 
         if (movimiento.getEstado() != MovimientoEstado.PENDIENTE) {

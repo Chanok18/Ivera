@@ -24,14 +24,16 @@ public class ConteoService {
     private final AlmacenRepository almacenRepository;
     private final StockRepository stockRepository;
     private final UsuarioRepository usuarioRepository;
+    private final ServicioAutorizacionUbicacion autorizacionUbicacion;
 
     public ConteoService(ConteoInventarioRepository conteoRepository,
                          ConteoDetalleRepository detalleRepository,
                          ProductoRepository productoRepository,
                          TiendaRepository tiendaRepository,
-                         AlmacenRepository almacenRepository,
-                         StockRepository stockRepository,
-                         UsuarioRepository usuarioRepository) {
+                          AlmacenRepository almacenRepository,
+                          StockRepository stockRepository,
+                          UsuarioRepository usuarioRepository,
+                          ServicioAutorizacionUbicacion autorizacionUbicacion) {
         this.conteoRepository = conteoRepository;
         this.detalleRepository = detalleRepository;
         this.productoRepository = productoRepository;
@@ -39,11 +41,13 @@ public class ConteoService {
         this.almacenRepository = almacenRepository;
         this.stockRepository = stockRepository;
         this.usuarioRepository = usuarioRepository;
+        this.autorizacionUbicacion = autorizacionUbicacion;
     }
 
     @Transactional
     public ConteoResponse iniciar(ConteoRequest request) {
         validarUbicacion(request.getUbicacionTipo(), request.getUbicacionId());
+        autorizacionUbicacion.verificarUbicacion(request.getUbicacionTipo(), request.getUbicacionId(), AccionAlmacen.CONTEO);
 
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         String email = auth.getName();
@@ -64,6 +68,7 @@ public class ConteoService {
     public ConteoResponse agregarDetalle(Long conteoId, ConteoDetalleRequest request) {
         ConteoInventario conteo = conteoRepository.findById(conteoId)
                 .orElseThrow(() -> new EntityNotFoundException("Conteo no encontrado: " + conteoId));
+        autorizacionUbicacion.verificarUbicacion(conteo.getUbicacionTipo(), conteo.getUbicacionId(), AccionAlmacen.CONTEO);
 
         if (conteo.getEstado() != ConteoEstado.EN_PROCESO) {
             throw new IllegalStateException("No se puede modificar un conteo que ya está finalizado");
@@ -104,6 +109,7 @@ public class ConteoService {
     public ConteoResponse finalizar(Long conteoId) {
         ConteoInventario conteo = conteoRepository.findById(conteoId)
                 .orElseThrow(() -> new EntityNotFoundException("Conteo no encontrado: " + conteoId));
+        autorizacionUbicacion.verificarUbicacion(conteo.getUbicacionTipo(), conteo.getUbicacionId(), AccionAlmacen.CONTEO);
 
         if (conteo.getEstado() != ConteoEstado.EN_PROCESO) {
             throw new IllegalStateException("El conteo ya se encuentra finalizado");
@@ -118,6 +124,7 @@ public class ConteoService {
     public ConteoResponse obtenerPorId(Long conteoId) {
         ConteoInventario conteo = conteoRepository.findById(conteoId)
                 .orElseThrow(() -> new EntityNotFoundException("Conteo no encontrado: " + conteoId));
+        autorizacionUbicacion.verificarUbicacion(conteo.getUbicacionTipo(), conteo.getUbicacionId(), AccionAlmacen.CONTEO);
         return toResponse(conteo);
     }
 

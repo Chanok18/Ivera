@@ -29,6 +29,7 @@ public class CompraService {
     private final StockRepository stockRepository;
     private final MovimientoRepository movimientoRepository;
     private final UsuarioRepository usuarioRepository;
+    private final ServicioAutorizacionUbicacion autorizacionUbicacion;
 
     public CompraService(CompraRepository compraRepository,
                          CompraDetalleRepository compraDetalleRepository,
@@ -37,9 +38,10 @@ public class CompraService {
                          ProductoRepository productoRepository,
                          UnidadMedidaRepository unidadMedidaRepository,
                          ProductoPresentacionRepository presentacionRepository,
-                         StockRepository stockRepository,
-                         MovimientoRepository movimientoRepository,
-                         UsuarioRepository usuarioRepository) {
+                          StockRepository stockRepository,
+                          MovimientoRepository movimientoRepository,
+                          UsuarioRepository usuarioRepository,
+                          ServicioAutorizacionUbicacion autorizacionUbicacion) {
         this.compraRepository = compraRepository;
         this.compraDetalleRepository = compraDetalleRepository;
         this.proveedorRepository = proveedorRepository;
@@ -50,6 +52,7 @@ public class CompraService {
         this.stockRepository = stockRepository;
         this.movimientoRepository = movimientoRepository;
         this.usuarioRepository = usuarioRepository;
+        this.autorizacionUbicacion = autorizacionUbicacion;
     }
 
     @Transactional
@@ -59,6 +62,7 @@ public class CompraService {
 
         Tienda tienda = tiendaRepository.findById(request.getTiendaId())
                 .orElseThrow(() -> new EntityNotFoundException("Tienda no encontrada: " + request.getTiendaId()));
+        autorizacionUbicacion.verificarTienda(tienda.getId());
 
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         String email = auth.getName();
@@ -76,6 +80,8 @@ public class CompraService {
             BigDecimal subtotal = itemReq.getCantidad().multiply(itemReq.getPrecioUnitario());
             total = total.add(subtotal);
         }
+
+        bloquearProductos(productosResueltos);
 
         Compra compra = new Compra();
         compra.setProveedor(proveedor);
@@ -140,6 +146,7 @@ public class CompraService {
 
     @Transactional(readOnly = true)
     public List<CompraResponse> listar(Long tiendaId) {
+        tiendaId = autorizacionUbicacion.resolverTiendaParaConsulta(tiendaId);
         List<Compra> compras = (tiendaId != null) ? compraRepository.findByTiendaId(tiendaId) : compraRepository.findAll();
         return compras.stream().map(c -> toResponse(c, compraDetalleRepository.findByCompraId(c.getId()))).toList();
     }
@@ -148,6 +155,7 @@ public class CompraService {
     public CompraResponse obtenerPorId(Long id) {
         Compra compra = compraRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Compra no encontrada: " + id));
+        autorizacionUbicacion.verificarTienda(compra.getTienda().getId());
         return toResponse(compra, compraDetalleRepository.findByCompraId(compra.getId()));
     }
 
@@ -174,6 +182,15 @@ public class CompraService {
             }
         }
         throw new IllegalArgumentException("La unidad seleccionada no corresponde a la unidad base ni a ninguna presentación válida del producto");
+    }
+
+    private void bloquearProductos(List<Producto> productos) {
+        productos.stream()
+                .map(Producto::getId)
+                .distinct()
+                .sorted()
+                .forEach(productoId -> productoRepository.findByIdForUpdate(productoId)
+                        .orElseThrow(() -> new EntityNotFoundException("Producto no encontrado: " + productoId)));
     }
 
     private CompraResponse toResponse(Compra c, List<CompraDetalle> detalles) {

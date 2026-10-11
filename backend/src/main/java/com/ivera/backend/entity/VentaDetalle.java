@@ -21,6 +21,10 @@ public class VentaDetalle {
     @Column(nullable = false, precision = 10, scale = 2)
     private BigDecimal cantidad;
 
+    // Nullable only for sales recorded before this snapshot was introduced.
+    @Column(name = "cantidad_base", precision = 10, scale = 2)
+    private BigDecimal cantidadBase;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "unidad_id", nullable = false)
     private UnidadMedida unidad;
@@ -36,6 +40,8 @@ public class VentaDetalle {
     public void setProducto(Producto producto) { this.producto = producto; }
     public BigDecimal getCantidad() { return cantidad; }
     public void setCantidad(BigDecimal cantidad) { this.cantidad = cantidad; }
+    public BigDecimal getCantidadBase() { return cantidadBase; }
+    public void setCantidadBase(BigDecimal cantidadBase) { this.cantidadBase = cantidadBase; }
     public UnidadMedida getUnidad() { return unidad; }
     public void setUnidad(UnidadMedida unidad) { this.unidad = unidad; }
     public BigDecimal getPrecioUnitario() { return precioUnitario; }

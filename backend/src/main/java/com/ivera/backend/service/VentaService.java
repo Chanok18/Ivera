@@ -14,7 +14,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 @Service
 public class VentaService {
@@ -28,6 +31,7 @@ public class VentaService {
     private final StockRepository stockRepository;
     private final MovimientoRepository movimientoRepository;
     private final UsuarioRepository usuarioRepository;
+    private final ServicioAutorizacionUbicacion autorizacionUbicacion;
 
     public VentaService(VentaRepository ventaRepository,
                         VentaDetalleRepository ventaDetalleRepository,
@@ -35,9 +39,10 @@ public class VentaService {
                         ProductoRepository productoRepository,
                         UnidadMedidaRepository unidadMedidaRepository,
                         ProductoPresentacionRepository presentacionRepository,
-                        StockRepository stockRepository,
-                        MovimientoRepository movimientoRepository,
-                        UsuarioRepository usuarioRepository) {
+                         StockRepository stockRepository,
+                         MovimientoRepository movimientoRepository,
+                         UsuarioRepository usuarioRepository,
+                         ServicioAutorizacionUbicacion autorizacionUbicacion) {
         this.ventaRepository = ventaRepository;
         this.ventaDetalleRepository = ventaDetalleRepository;
         this.tiendaRepository = tiendaRepository;
@@ -47,12 +52,14 @@ public class VentaService {
         this.stockRepository = stockRepository;
         this.movimientoRepository = movimientoRepository;
         this.usuarioRepository = usuarioRepository;
+        this.autorizacionUbicacion = autorizacionUbicacion;
     }
 
     @Transactional
     public VentaResponse registrar(VentaRequest request) {
         Tienda tienda = tiendaRepository.findById(request.getTiendaId())
                 .orElseThrow(() -> new EntityNotFoundException("Tienda no encontrada: " + request.getTiendaId()));
+        autorizacionUbicacion.verificarTienda(tienda.getId());
 
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         String email = auth.getName();
@@ -61,30 +68,42 @@ public class VentaService {
 
         // 1. Resolver productos y verificación previa de stock para todos los ítems (Todo o Nada)
         BigDecimal total = BigDecimal.ZERO;
-        List<Producto> productosResueltos = new ArrayList<>();
+        List<ItemVentaResuelto> itemsResueltos = new ArrayList<>();
+        Map<StockKey, BigDecimal> cantidadSolicitadaPorStock = new LinkedHashMap<>();
+        Map<StockKey, Producto> productoPorStock = new HashMap<>();
 
         for (VentaItemRequest itemReq : request.getItems()) {
             Producto producto = resolverProducto(itemReq);
-            productosResueltos.add(producto);
 
             UnidadMedida unidad = unidadMedidaRepository.findById(itemReq.getUnidadId())
                     .orElseThrow(() -> new EntityNotFoundException("Unidad de medida no encontrada: " + itemReq.getUnidadId()));
 
             BigDecimal cantidadBase = calcularCantidadBase(producto, unidad, itemReq.getCantidad());
 
-            Stock stock = stockRepository.findByProductoIdAndUbicacionTipoAndUbicacionId(
-                    producto.getId(), UbicacionTipo.TIENDA, tienda.getId()
-            ).orElse(null);
-
-            BigDecimal stockDisponible = stock != null ? stock.getCantidad() : BigDecimal.ZERO;
-
-            if (stockDisponible.compareTo(cantidadBase) < 0) {
-                throw new IllegalArgumentException("Stock insuficiente para el producto: " + producto.getNombre() +
-                        " (Disponible: " + stockDisponible + ", Requerido: " + cantidadBase + ")");
-            }
-
             BigDecimal subtotal = itemReq.getCantidad().multiply(itemReq.getPrecioUnitario());
             total = total.add(subtotal);
+            itemsResueltos.add(new ItemVentaResuelto(itemReq, producto, unidad, cantidadBase));
+
+            StockKey stockKey = new StockKey(producto.getId(), UbicacionTipo.TIENDA, tienda.getId());
+            cantidadSolicitadaPorStock.merge(stockKey, cantidadBase, BigDecimal::add);
+            productoPorStock.put(stockKey, producto);
+        }
+
+        bloquearProductos(itemsResueltos);
+
+        Map<StockKey, Stock> stockPorClave = new HashMap<>();
+        for (Map.Entry<StockKey, BigDecimal> entrada : cantidadSolicitadaPorStock.entrySet()) {
+            StockKey stockKey = entrada.getKey();
+            Stock stock = stockRepository.findByProductoIdAndUbicacionTipoAndUbicacionId(
+                    stockKey.productoId(), stockKey.ubicacionTipo(), stockKey.ubicacionId()
+            ).orElse(null);
+            BigDecimal stockDisponible = stock != null ? stock.getCantidad() : BigDecimal.ZERO;
+            if (stockDisponible.compareTo(entrada.getValue()) < 0) {
+                Producto producto = productoPorStock.get(stockKey);
+                throw new IllegalArgumentException("Stock insuficiente para el producto: " + producto.getNombre() +
+                        " (Disponible: " + stockDisponible + ", Requerido: " + entrada.getValue() + ")");
+            }
+            stockPorClave.put(stockKey, stock);
         }
 
         // 2. Procesar la venta
@@ -96,20 +115,20 @@ public class VentaService {
 
         List<VentaDetalle> detalles = new ArrayList<>();
 
-        for (int i = 0; i < request.getItems().size(); i++) {
-            VentaItemRequest itemReq = request.getItems().get(i);
-            Producto producto = productosResueltos.get(i);
-            UnidadMedida unidad = unidadMedidaRepository.findById(itemReq.getUnidadId()).get();
+        for (ItemVentaResuelto itemResuelto : itemsResueltos) {
+            VentaItemRequest itemReq = itemResuelto.request();
+            Producto producto = itemResuelto.producto();
+            UnidadMedida unidad = itemResuelto.unidad();
+            BigDecimal cantidadBase = itemResuelto.cantidadBase();
 
             VentaDetalle detalle = new VentaDetalle();
             detalle.setVenta(venta);
             detalle.setProducto(producto);
             detalle.setCantidad(itemReq.getCantidad());
+            detalle.setCantidadBase(cantidadBase);
             detalle.setUnidad(unidad);
             detalle.setPrecioUnitario(itemReq.getPrecioUnitario());
             detalles.add(ventaDetalleRepository.save(detalle));
-
-            BigDecimal cantidadBase = calcularCantidadBase(producto, unidad, itemReq.getCantidad());
 
             // Crear movimiento de SALIDA (aprobado automático)
             Movimiento movimiento = new Movimiento();
@@ -126,9 +145,7 @@ public class VentaService {
             movimientoRepository.save(movimiento);
 
             // Descontar del stock de la tienda
-            Stock stock = stockRepository.findByProductoIdAndUbicacionTipoAndUbicacionId(
-                    producto.getId(), UbicacionTipo.TIENDA, tienda.getId()
-            ).get();
+            Stock stock = stockPorClave.get(new StockKey(producto.getId(), UbicacionTipo.TIENDA, tienda.getId()));
             stock.setCantidad(stock.getCantidad().subtract(cantidadBase));
             stockRepository.save(stock);
         }
@@ -138,6 +155,7 @@ public class VentaService {
 
     @Transactional(readOnly = true)
     public List<VentaResponse> listar(Long tiendaId) {
+        tiendaId = autorizacionUbicacion.resolverTiendaParaConsulta(tiendaId);
         List<Venta> ventas = (tiendaId != null) ? ventaRepository.findByTiendaId(tiendaId) : ventaRepository.findAll();
         return ventas.stream().map(v -> toResponse(v, ventaDetalleRepository.findByVentaId(v.getId()))).toList();
     }
@@ -146,6 +164,7 @@ public class VentaService {
     public VentaResponse obtenerPorId(Long id) {
         Venta venta = ventaRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Venta no encontrada: " + id));
+        autorizacionUbicacion.verificarTienda(venta.getTienda().getId());
         return toResponse(venta, ventaDetalleRepository.findByVentaId(venta.getId()));
     }
 
@@ -174,6 +193,15 @@ public class VentaService {
         throw new IllegalArgumentException("La unidad seleccionada no corresponde a la unidad base ni a ninguna presentación válida del producto");
     }
 
+    private void bloquearProductos(List<ItemVentaResuelto> itemsResueltos) {
+        itemsResueltos.stream()
+                .map(item -> item.producto().getId())
+                .distinct()
+                .sorted()
+                .forEach(productoId -> productoRepository.findByIdForUpdate(productoId)
+                        .orElseThrow(() -> new EntityNotFoundException("Producto no encontrado: " + productoId)));
+    }
+
     private VentaResponse toResponse(Venta v, List<VentaDetalle> detalles) {
         VentaResponse res = new VentaResponse();
         res.setId(v.getId());
@@ -198,4 +226,9 @@ public class VentaService {
         res.setItems(itemResponses);
         return res;
     }
+
+    private record ItemVentaResuelto(VentaItemRequest request, Producto producto, UnidadMedida unidad,
+                                     BigDecimal cantidadBase) { }
+
+    private record StockKey(Long productoId, UbicacionTipo ubicacionTipo, Long ubicacionId) { }
 }
