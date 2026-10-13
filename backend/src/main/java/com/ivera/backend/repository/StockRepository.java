@@ -22,4 +22,15 @@ public interface StockRepository extends JpaRepository<Stock, Long> {
             having coalesce(sum(s.cantidad), 0) <= :umbral
             """)
     List<StockBajoResponse> buscarStockBajo(@Param("umbral") BigDecimal umbral);
+
+    @Query("""
+            select new com.ivera.backend.dto.StockBajoResponse(p.id, p.nombre, p.codigoBarras, coalesce(sum(s.cantidad), 0))
+            from Producto p left join Stock s on s.producto = p
+                and s.ubicacionTipo = :tipo and s.ubicacionId = :ubicacionId
+            group by p.id, p.nombre, p.codigoBarras
+            having coalesce(sum(s.cantidad), 0) <= :umbral
+            """)
+    List<StockBajoResponse> buscarStockBajoPorUbicacion(@Param("tipo") UbicacionTipo tipo,
+                                                          @Param("ubicacionId") Long ubicacionId,
+                                                          @Param("umbral") BigDecimal umbral);
 }

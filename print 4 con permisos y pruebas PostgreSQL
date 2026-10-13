@@ -1,0 +1,21 @@
+ PROGRESO.md                                        | 107 [32m+++++[m[31m-[m
+ .../com/ivera/backend/config/DataInitializer.java  |   4 [32m+[m[31m-[m
+ .../com/ivera/backend/config/SecurityConfig.java   |   6 [32m+[m[31m-[m
+ .../backend/controller/GlobalExceptionHandler.java |  37 [32m++[m
+ .../repository/ConteoDetalleRepository.java        |  14 [32m+[m
+ .../ivera/backend/repository/StockRepository.java  |  11 [32m+[m
+ .../backend/repository/VentaDetalleRepository.java |  12 [32m+[m
+ .../com/ivera/backend/service/ConteoService.java   |   1 [32m+[m
+ .../ivera/backend/service/MovimientoService.java   |  29 [32m+[m[31m-[m
+ .../com/ivera/backend/service/ReporteService.java  |  41 [32m++[m[31m-[m
+ .../AutorizacionAlmacenControllerTest.java         |  79 [32m++++[m
+ .../backend/controller/ReporteControllerTest.java  |   2 [32m+[m[31m-[m
+ .../integration/PostgresConcurrencyTest.java       | 405 [32m+++++++++++++++++++++[m
+ .../service/AutorizacionAlmacenServiceTest.java    |  88 [32m+++++[m
+ .../ivera/backend/service/CompraServiceTest.java   |  53 [32m+++[m
+ .../backend/service/MovimientoServiceTest.java     |  45 [32m++[m[31m-[m
+ .../ivera/backend/service/ReporteServiceTest.java  |  19 [32m+[m
+ .../service/ServicioAutorizacionUbicacionTest.java | 109 [32m++++++[m
+ .../ivera/backend/service/VentaServiceTest.java    |  16 [32m+[m[31m-[m
+ .../resources/application-postgres-integration.yml |  12 [32m+[m
+ 20 files changed, 1070 insertions(+), 20 deletions(-)

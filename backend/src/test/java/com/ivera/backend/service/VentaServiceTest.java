@@ -39,6 +39,7 @@ class VentaServiceTest {
     @Mock private StockRepository stockRepository;
     @Mock private MovimientoRepository movimientoRepository;
     @Mock private UsuarioRepository usuarioRepository;
+    @Mock private ServicioAutorizacionUbicacion autorizacionUbicacion;
     @InjectMocks private VentaService ventaService;
 
     private final UnidadMedida unidad = unidad(1L, "unidad");
@@ -57,14 +58,14 @@ class VentaServiceTest {
         usuario.setId(1L);
         usuario.setNombre("Vendedor");
         when(tiendaRepository.findById(1L)).thenReturn(Optional.of(tienda));
-        when(usuarioRepository.findByEmail("vendedor@ivera.pe")).thenReturn(Optional.of(usuario));
+        lenient().when(usuarioRepository.findByEmail("vendedor@ivera.pe")).thenReturn(Optional.of(usuario));
         lenient().when(ventaRepository.save(any(Venta.class))).thenAnswer(invocation -> {
             Venta venta = invocation.getArgument(0);
             venta.setId(1L);
             return venta;
         });
         lenient().when(ventaDetalleRepository.save(any(VentaDetalle.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        when(stockRepository.findByProductoIdAndUbicacionTipoAndUbicacionId(anyLong(), eq(UbicacionTipo.TIENDA), eq(1L)))
+        lenient().when(stockRepository.findByProductoIdAndUbicacionTipoAndUbicacionId(anyLong(), eq(UbicacionTipo.TIENDA), eq(1L)))
                 .thenReturn(Optional.of(stock));
     }
 
@@ -134,6 +135,17 @@ class VentaServiceTest {
         var orden = inOrder(productoRepository, stockRepository);
         orden.verify(productoRepository).findByIdForUpdate(10L);
         orden.verify(stockRepository).findByProductoIdAndUbicacionTipoAndUbicacionId(10L, UbicacionTipo.TIENDA, 1L);
+    }
+
+    @Test
+    void rechazaVentaEnOtraTiendaAntesDeModificarStock() {
+        doThrow(new org.springframework.security.access.AccessDeniedException("No tiene permiso para operar en esta tienda"))
+                .when(autorizacionUbicacion).verificarTienda(1L);
+
+        assertThatThrownBy(() -> ventaService.registrar(request(item(10L, 1L, "1"))))
+                .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+        verify(ventaRepository, never()).save(any());
+        verify(stockRepository, never()).save(any());
     }
 
     @Test

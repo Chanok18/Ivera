@@ -24,4 +24,18 @@ public interface ConteoDetalleRepository extends JpaRepository<ConteoDetalle, Lo
             """)
     List<ConteoDetalle> buscarDiferencias(@Param("desde") LocalDateTime desde,
                                           @Param("hasta") LocalDateTime hasta);
+
+    @Query("""
+            select d from ConteoDetalle d
+            join fetch d.conteo c
+            join fetch d.producto
+            where d.diferencia <> 0
+              and c.ubicacionTipo = :tipo and c.ubicacionId = :ubicacionId
+              and (:desde is null or c.fecha >= :desde)
+              and (:hasta is null or c.fecha <= :hasta)
+            """)
+    List<ConteoDetalle> buscarDiferenciasPorUbicacion(@Param("tipo") com.ivera.backend.enums.UbicacionTipo tipo,
+                                                       @Param("ubicacionId") Long ubicacionId,
+                                                       @Param("desde") LocalDateTime desde,
+                                                       @Param("hasta") LocalDateTime hasta);
 }

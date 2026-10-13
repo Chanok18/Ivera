@@ -1,6 +1,7 @@
 package com.ivera.backend.service;
 
 import com.ivera.backend.entity.*;
+import com.ivera.backend.dto.MovimientoRequest;
 import com.ivera.backend.enums.*;
 import com.ivera.backend.repository.*;
 import org.junit.jupiter.api.AfterEach;
@@ -31,6 +32,7 @@ class MovimientoServiceTest {
     @Mock private AlmacenRepository almacenRepository;
     @Mock private StockRepository stockRepository;
     @Mock private UsuarioRepository usuarioRepository;
+    @Mock private ServicioAutorizacionUbicacion autorizacionUbicacion;
     @InjectMocks private MovimientoService movimientoService;
 
     private Movimiento movimiento;
@@ -69,13 +71,14 @@ class MovimientoServiceTest {
         stock = new Stock();
         stock.setCantidad(new BigDecimal("5"));
 
-        when(movimientoRepository.findByIdForUpdate(5L)).thenReturn(Optional.of(movimiento));
+        lenient().when(movimientoRepository.findByIdForUpdate(5L)).thenReturn(Optional.of(movimiento));
         lenient().when(productoRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(producto));
         lenient().when(usuarioRepository.findByEmail("admin@ivera.pe")).thenReturn(Optional.of(admin));
         lenient().when(stockRepository.findByProductoIdAndUbicacionTipoAndUbicacionId(10L, UbicacionTipo.TIENDA, 1L))
                 .thenReturn(Optional.of(stock));
         lenient().when(tiendaRepository.findById(1L)).thenReturn(Optional.of(tienda));
         lenient().when(movimientoRepository.save(any(Movimiento.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        lenient().when(autorizacionUbicacion.esAdministrador()).thenReturn(true);
     }
 
     @AfterEach
@@ -120,5 +123,45 @@ class MovimientoServiceTest {
         verify(movimientoRepository, times(2)).findByIdForUpdate(5L);
         verify(stockRepository, never()).save(any());
         verify(movimientoRepository, times(1)).save(movimiento);
+    }
+
+    @Test
+    void rechazaEntradaManualRegistradaPorTrabajador() {
+        MovimientoRequest request = request(MovimientoTipo.ENTRADA);
+        when(unidadMedidaRepository.findById(1L)).thenReturn(Optional.of(movimiento.getUnidad()));
+        when(tiendaRepository.existsById(1L)).thenReturn(true);
+        when(autorizacionUbicacion.esAdministrador()).thenReturn(false);
+
+        assertThatThrownBy(() -> movimientoService.registrar(request))
+                .isInstanceOf(org.springframework.security.access.AccessDeniedException.class)
+                .hasMessageContaining("entrada y salida");
+        verify(movimientoRepository, never()).save(any());
+    }
+
+    @Test
+    void rechazaTrasladoDesdeOrigenNoAutorizado() {
+        MovimientoRequest request = request(MovimientoTipo.TRASLADO);
+        request.setUbicacionOrigenTipo(UbicacionTipo.ALMACEN);
+        request.setUbicacionDestinoTipo(UbicacionTipo.TIENDA);
+        request.setUbicacionDestinoId(1L);
+        when(unidadMedidaRepository.findById(1L)).thenReturn(Optional.of(movimiento.getUnidad()));
+        when(almacenRepository.existsById(1L)).thenReturn(true);
+        doThrow(new org.springframework.security.access.AccessDeniedException("No tiene permiso para realizar esta operación en el almacén"))
+                .when(autorizacionUbicacion).verificarUbicacion(UbicacionTipo.ALMACEN, 1L, AccionAlmacen.TRASLADO_ORIGEN);
+
+        assertThatThrownBy(() -> movimientoService.registrar(request))
+                .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+        verify(movimientoRepository, never()).save(any());
+    }
+
+    private MovimientoRequest request(MovimientoTipo tipo) {
+        MovimientoRequest request = new MovimientoRequest();
+        request.setProductoId(10L);
+        request.setUnidadId(1L);
+        request.setTipo(tipo);
+        request.setCantidad(BigDecimal.ONE);
+        request.setUbicacionOrigenTipo(UbicacionTipo.TIENDA);
+        request.setUbicacionOrigenId(1L);
+        return request;
     }
 }

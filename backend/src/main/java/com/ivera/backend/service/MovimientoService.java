@@ -6,6 +6,7 @@ import com.ivera.backend.dto.UnidadResponse;
 import com.ivera.backend.entity.*;
 import com.ivera.backend.enums.MovimientoEstado;
 import com.ivera.backend.enums.MovimientoTipo;
+import com.ivera.backend.enums.AccionAlmacen;
 import com.ivera.backend.enums.UbicacionTipo;
 import com.ivera.backend.repository.*;
 import jakarta.persistence.EntityNotFoundException;
@@ -28,15 +29,17 @@ public class MovimientoService {
     private final AlmacenRepository almacenRepository;
     private final StockRepository stockRepository;
     private final UsuarioRepository usuarioRepository;
+    private final ServicioAutorizacionUbicacion autorizacionUbicacion;
 
     public MovimientoService(MovimientoRepository movimientoRepository,
                              ProductoRepository productoRepository,
                              UnidadMedidaRepository unidadMedidaRepository,
                              ProductoPresentacionRepository presentacionRepository,
                              TiendaRepository tiendaRepository,
-                             AlmacenRepository almacenRepository,
-                             StockRepository stockRepository,
-                             UsuarioRepository usuarioRepository) {
+                              AlmacenRepository almacenRepository,
+                              StockRepository stockRepository,
+                              UsuarioRepository usuarioRepository,
+                              ServicioAutorizacionUbicacion autorizacionUbicacion) {
         this.movimientoRepository = movimientoRepository;
         this.productoRepository = productoRepository;
         this.unidadMedidaRepository = unidadMedidaRepository;
@@ -45,6 +48,7 @@ public class MovimientoService {
         this.almacenRepository = almacenRepository;
         this.stockRepository = stockRepository;
         this.usuarioRepository = usuarioRepository;
+        this.autorizacionUbicacion = autorizacionUbicacion;
     }
 
     @Transactional
@@ -66,6 +70,19 @@ public class MovimientoService {
                 .orElseThrow(() -> new EntityNotFoundException("Unidad de medida no encontrada: " + request.getUnidadId()));
 
         validarUbicacion(request.getUbicacionOrigenTipo(), request.getUbicacionOrigenId());
+
+        if (request.getTipo() == MovimientoTipo.ENTRADA || request.getTipo() == MovimientoTipo.SALIDA) {
+            if (!autorizacionUbicacion.esAdministrador()) {
+                throw new org.springframework.security.access.AccessDeniedException(
+                        "Los movimientos manuales de entrada y salida son exclusivos de administrador");
+            }
+        } else if (request.getTipo() == MovimientoTipo.AJUSTE) {
+            autorizacionUbicacion.verificarUbicacion(
+                    request.getUbicacionOrigenTipo(), request.getUbicacionOrigenId(), AccionAlmacen.AJUSTE);
+        } else if (request.getTipo() == MovimientoTipo.TRASLADO) {
+            autorizacionUbicacion.verificarUbicacion(
+                    request.getUbicacionOrigenTipo(), request.getUbicacionOrigenId(), AccionAlmacen.TRASLADO_ORIGEN);
+        }
 
         if (request.getTipo() == MovimientoTipo.TRASLADO) {
             if (request.getUbicacionDestinoTipo() == null || request.getUbicacionDestinoId() == null) {
@@ -132,6 +149,9 @@ public class MovimientoService {
 
     @Transactional
     public MovimientoResponse aprobar(Long id) {
+        if (!autorizacionUbicacion.esAdministrador()) {
+            throw new org.springframework.security.access.AccessDeniedException("Solo un administrador puede aprobar movimientos");
+        }
         Movimiento movimiento = movimientoRepository.findByIdForUpdate(id)
                 .orElseThrow(() -> new EntityNotFoundException("Movimiento no encontrado: " + id));
 
@@ -212,6 +232,9 @@ public class MovimientoService {
 
     @Transactional
     public MovimientoResponse rechazar(Long id) {
+        if (!autorizacionUbicacion.esAdministrador()) {
+            throw new org.springframework.security.access.AccessDeniedException("Solo un administrador puede rechazar movimientos");
+        }
         Movimiento movimiento = movimientoRepository.findByIdForUpdate(id)
                 .orElseThrow(() -> new EntityNotFoundException("Movimiento no encontrado: " + id));
 

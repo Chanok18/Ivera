@@ -34,7 +34,7 @@ class ReporteControllerTest {
     @Test
     void rechazaSolicitudSinAutenticacion() throws Exception {
         mockMvc.perform(get("/api/reportes/stock-bajo"))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
     }
 
     @Test

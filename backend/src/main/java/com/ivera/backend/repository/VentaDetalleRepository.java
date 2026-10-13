@@ -11,6 +11,7 @@ import java.util.List;
 public interface VentaDetalleRepository extends JpaRepository<VentaDetalle, Long> {
     List<VentaDetalle> findByVentaId(Long ventaId);
     boolean existsByCantidadBaseIsNull();
+    boolean existsByCantidadBaseIsNullAndVentaTiendaId(Long tiendaId);
 
     @Query("""
             select new com.ivera.backend.dto.ProductoMasVendidoResponse(
@@ -21,4 +22,15 @@ public interface VentaDetalleRepository extends JpaRepository<VentaDetalle, Long
             order by sum(vd.cantidadBase) desc
             """)
     List<ProductoMasVendidoResponse> buscarProductosMasVendidos(Pageable pageable);
+
+    @Query("""
+            select new com.ivera.backend.dto.ProductoMasVendidoResponse(
+                vd.producto.id, vd.producto.nombre, sum(vd.cantidadBase)
+            )
+            from VentaDetalle vd
+            where vd.venta.tienda.id = :tiendaId
+            group by vd.producto.id, vd.producto.nombre
+            order by sum(vd.cantidadBase) desc
+            """)
+    List<ProductoMasVendidoResponse> buscarProductosMasVendidosPorTienda(Long tiendaId, Pageable pageable);
 }

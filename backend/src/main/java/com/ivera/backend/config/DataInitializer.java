@@ -11,10 +11,12 @@ import com.ivera.backend.repository.UnidadMedidaRepository;
 import com.ivera.backend.repository.UsuarioRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.context.annotation.Profile;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
 @Component
+@Profile("!postgres-integration")
 public class DataInitializer implements CommandLineRunner {
 
     private final UnidadMedidaRepository unidadMedidaRepository;

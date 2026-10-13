@@ -23,34 +23,46 @@ public class ReporteService {
     private final VentaDetalleRepository ventaDetalleRepository;
     private final TiendaRepository tiendaRepository;
     private final AlmacenRepository almacenRepository;
+    private final ServicioAutorizacionUbicacion autorizacionUbicacion;
 
     public ReporteService(StockRepository stockRepository,
                           ConteoDetalleRepository conteoDetalleRepository,
                           MovimientoRepository movimientoRepository,
-                          VentaDetalleRepository ventaDetalleRepository,
-                          TiendaRepository tiendaRepository,
-                          AlmacenRepository almacenRepository) {
+                           VentaDetalleRepository ventaDetalleRepository,
+                           TiendaRepository tiendaRepository,
+                           AlmacenRepository almacenRepository,
+                           ServicioAutorizacionUbicacion autorizacionUbicacion) {
         this.stockRepository = stockRepository;
         this.conteoDetalleRepository = conteoDetalleRepository;
         this.movimientoRepository = movimientoRepository;
         this.ventaDetalleRepository = ventaDetalleRepository;
         this.tiendaRepository = tiendaRepository;
         this.almacenRepository = almacenRepository;
+        this.autorizacionUbicacion = autorizacionUbicacion;
     }
 
     @Transactional(readOnly = true)
     public List<StockBajoResponse> obtenerStockBajo(BigDecimal umbral) {
         BigDecimal limite = (umbral != null) ? umbral : BigDecimal.TEN;
+        if (!autorizacionUbicacion.esAdministrador()) {
+            Long tiendaId = autorizacionUbicacion.resolverTiendaParaConsulta(null);
+            return stockRepository.buscarStockBajoPorUbicacion(UbicacionTipo.TIENDA, tiendaId, limite);
+        }
         return stockRepository.buscarStockBajo(limite);
     }
 
     @Transactional(readOnly = true)
     public List<DiferenciaInventarioResponse> obtenerDiferenciasInventario(LocalDate desde, LocalDate hasta) {
         validarRangoFechas(desde, hasta);
-        List<ConteoDetalle> detalles = conteoDetalleRepository.buscarDiferencias(
-                desde != null ? desde.atStartOfDay() : null,
-                hasta != null ? hasta.atTime(23, 59, 59, 999_999_999) : null
-        );
+        List<ConteoDetalle> detalles;
+        if (autorizacionUbicacion.esAdministrador()) {
+            detalles = conteoDetalleRepository.buscarDiferencias(
+                    desde != null ? desde.atStartOfDay() : null, hasta != null ? hasta.atTime(23, 59, 59, 999_999_999) : null);
+        } else {
+            detalles = conteoDetalleRepository.buscarDiferenciasPorUbicacion(UbicacionTipo.TIENDA,
+                    autorizacionUbicacion.resolverTiendaParaConsulta(null), desde != null ? desde.atStartOfDay() : null,
+                    hasta != null ? hasta.atTime(23, 59, 59, 999_999_999) : null);
+        }
         Map<Long, String> nombresTiendas = obtenerNombresTiendas(detalles.stream()
                 .map(ConteoDetalle::getConteo)
                 .filter(conteo -> conteo.getUbicacionTipo() == UbicacionTipo.TIENDA)
@@ -96,8 +108,11 @@ public class ReporteService {
             throw new IllegalArgumentException("La tienda indicada no existe");
         }
         validarRangoFechas(desde, hasta);
+        Long tiendaAutorizada = autorizacionUbicacion.esAdministrador()
+                ? tiendaId
+                : autorizacionUbicacion.resolverTiendaParaConsulta(tiendaId);
         List<Movimiento> movimientos = movimientoRepository.buscarParaReporte(
-                tiendaId,
+                tiendaAutorizada,
                 UbicacionTipo.TIENDA,
                 desde != null ? desde.atStartOfDay() : null,
                 hasta != null ? hasta.atTime(23, 59, 59, 999_999_999) : null
@@ -112,12 +127,18 @@ public class ReporteService {
     @Transactional(readOnly = true)
     public List<ProductoMasVendidoResponse> obtenerProductosMasVendidos(Integer limite) {
         int limit = limite != null ? limite : 5;
-        if (ventaDetalleRepository.existsByCantidadBaseIsNull()) {
+        Long tiendaId = autorizacionUbicacion.esAdministrador() ? null : autorizacionUbicacion.resolverTiendaParaConsulta(null);
+        boolean hayHistoricosIncompletos = tiendaId == null
+                ? ventaDetalleRepository.existsByCantidadBaseIsNull()
+                : ventaDetalleRepository.existsByCantidadBaseIsNullAndVentaTiendaId(tiendaId);
+        if (hayHistoricosIncompletos) {
             throw new ReporteIncompletoException(
                     "No se puede calcular el reporte completo porque existen ventas históricas sin cantidad en unidad base"
             );
         }
-        return ventaDetalleRepository.buscarProductosMasVendidos(PageRequest.of(0, limit));
+        return tiendaId == null
+                ? ventaDetalleRepository.buscarProductosMasVendidos(PageRequest.of(0, limit))
+                : ventaDetalleRepository.buscarProductosMasVendidosPorTienda(tiendaId, PageRequest.of(0, limit));
     }
 
     private void validarRangoFechas(LocalDate desde, LocalDate hasta) {

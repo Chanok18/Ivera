@@ -6,6 +6,7 @@ import com.ivera.backend.enums.*;
 import com.ivera.backend.exception.ReporteIncompletoException;
 import com.ivera.backend.repository.*;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -30,7 +31,13 @@ class ReporteServiceTest {
     @Mock private VentaDetalleRepository ventaDetalleRepository;
     @Mock private TiendaRepository tiendaRepository;
     @Mock private AlmacenRepository almacenRepository;
+    @Mock private ServicioAutorizacionUbicacion autorizacionUbicacion;
     @InjectMocks private ReporteService reporteService;
+
+    @BeforeEach
+    void configurarAdministrador() {
+        lenient().when(autorizacionUbicacion.esAdministrador()).thenReturn(true);
+    }
 
     @Test
     void obtenerStockBajoUsaElUmbralIndicadoYElTotalAgregadoPorUbicacion() {
@@ -139,6 +146,18 @@ class ReporteServiceTest {
                 .isInstanceOf(ReporteIncompletoException.class)
                 .hasMessage("No se puede calcular el reporte completo porque existen ventas históricas sin cantidad en unidad base");
         verify(ventaDetalleRepository, never()).buscarProductosMasVendidos(any());
+    }
+
+    @Test
+    void trabajadorRecibeSoloElReporteDeSuTienda() {
+        when(autorizacionUbicacion.esAdministrador()).thenReturn(false);
+        when(autorizacionUbicacion.resolverTiendaParaConsulta(null)).thenReturn(1L);
+        when(stockRepository.buscarStockBajoPorUbicacion(UbicacionTipo.TIENDA, 1L, BigDecimal.TEN)).thenReturn(List.of());
+
+        reporteService.obtenerStockBajo(null);
+
+        verify(stockRepository).buscarStockBajoPorUbicacion(UbicacionTipo.TIENDA, 1L, BigDecimal.TEN);
+        verify(stockRepository, never()).buscarStockBajo(any());
     }
 
     private ConteoDetalle crearDetalleConteo(BigDecimal diferencia) {
