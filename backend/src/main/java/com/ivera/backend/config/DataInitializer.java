@@ -31,11 +31,14 @@ public class DataInitializer implements CommandLineRunner {
     @Value("${ADMIN_PASSWORD}")
     private String adminPassword;
 
-    @Value("${TEST_WORKER_EMAIL}")
+    @Value("${TEST_WORKER_EMAIL:}")
     private String workerEmail;
 
-    @Value("${TEST_WORKER_PASSWORD}")
+    @Value("${TEST_WORKER_PASSWORD:}")
     private String workerPassword;
+
+    @Value("${app.seed.test-worker.enabled:false}")
+    private boolean testWorkerEnabled;
 
     public DataInitializer(UnidadMedidaRepository unidadMedidaRepository,
                            TiendaRepository tiendaRepository,
@@ -105,6 +108,12 @@ public class DataInitializer implements CommandLineRunner {
     }
 
     private void cargarTrabajadorPrueba() {
+        if (!testWorkerEnabled) {
+            return;
+        }
+        if (workerEmail.isBlank() || workerPassword.isBlank()) {
+            throw new IllegalStateException("TEST_WORKER_EMAIL y TEST_WORKER_PASSWORD son obligatorios al habilitar el trabajador de prueba");
+        }
         if (!usuarioRepository.existsByEmail(workerEmail)) {
             Usuario worker = new Usuario();
             worker.setNombre("Trabajador de Prueba");

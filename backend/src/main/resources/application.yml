@@ -23,4 +23,10 @@ springdoc:
     path: /api-docs
   swagger-ui:
     path: /swagger-ui.html
-    
+
+app:
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://127.0.0.1:5173}
+  seed:
+    test-worker:
+      enabled: ${SEED_TEST_WORKER_ENABLED:false}

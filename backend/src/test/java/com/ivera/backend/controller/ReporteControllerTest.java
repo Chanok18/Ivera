@@ -57,6 +57,24 @@ class ReporteControllerTest {
 
     @Test
     @WithMockUser(roles = "ADMINISTRADOR")
+    void aceptaMovimientosSinFiltrosOpcionales() throws Exception {
+        when(reporteService.obtenerMovimientos(isNull(), isNull(), isNull())).thenReturn(List.of());
+
+        mockMvc.perform(get("/api/reportes/movimientos"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMINISTRADOR")
+    void aceptaDiferenciasSinFiltrosOpcionales() throws Exception {
+        when(reporteService.obtenerDiferenciasInventario(isNull(), isNull())).thenReturn(List.of());
+
+        mockMvc.perform(get("/api/reportes/diferencias-inventario"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMINISTRADOR")
     void rechazaUmbralNegativo() throws Exception {
         mockMvc.perform(get("/api/reportes/stock-bajo?umbral=-1"))
                 .andExpect(status().isBadRequest());

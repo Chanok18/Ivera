@@ -3,6 +3,7 @@ package com.ivera.backend.dto;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
+import jakarta.validation.Valid;
 import java.math.BigDecimal;
 import java.util.List;
 
@@ -26,6 +27,7 @@ public class ProductoRequest {
     @Positive
     private BigDecimal precioUnitario;
 
+    @Valid
     private List<PresentacionRequest> presentaciones;
 
     public String getNombre() { return nombre; }
